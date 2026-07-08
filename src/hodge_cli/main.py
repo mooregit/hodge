@@ -481,6 +481,8 @@ def controls_lines() -> list[str]:
     return [
         "Enter send",
         "/q exit",
+        "/tab next",
+        "/tab new [agent]",
         "/agent cycle",
         "/model cycle",
         "/spec <goal>",
@@ -802,7 +804,121 @@ def log_lines(log: list[str], width: int, limit: int = 80) -> list[str]:
     return lines[-limit:]
 
 
+TAB_FIELDS = ("agent", "model", "session", "show_process", "log")
+
+
+def ensure_tabs(state: dict) -> None:
+    if "tabs" in state:
+        return
+    state["active_tab"] = 0
+    state["tabs"] = [{field: state[field] for field in TAB_FIELDS}]
+
+
+def save_active_tab(state: dict) -> None:
+    ensure_tabs(state)
+    tab = state["tabs"][state["active_tab"]]
+    for field in TAB_FIELDS:
+        tab[field] = state[field]
+
+
+def load_active_tab(state: dict) -> None:
+    tab = state["tabs"][state["active_tab"]]
+    for field in TAB_FIELDS:
+        state[field] = tab[field]
+
+
+def switch_tab(state: dict, index: int) -> bool:
+    ensure_tabs(state)
+    if not 0 <= index < len(state["tabs"]):
+        state["log"].append("Unknown tab.")
+        return False
+    save_active_tab(state)
+    state["active_tab"] = index
+    load_active_tab(state)
+    return True
+
+
+def new_tab(state: dict, agent: str | None = None) -> None:
+    ensure_tabs(state)
+    save_active_tab(state)
+    agent = agent or state["agent"]
+    model = state["config"]["agents"][agent].get("default_model", "")
+    session = f"{state['session']}-{len(state['tabs']) + 1}"
+    state["tabs"].append(
+        {
+            "agent": agent,
+            "model": model,
+            "session": session,
+            "show_process": state["show_process"],
+            "log": [banner(agent, model)],
+        }
+    )
+    state["active_tab"] = len(state["tabs"]) - 1
+    load_active_tab(state)
+
+
+def tab_bar_parts(state: dict, width: int) -> tuple[str, list[tuple[int, int, int | str]]]:
+    ensure_tabs(state)
+    text = ""
+    regions = []
+    for i, tab in enumerate(state["tabs"], 1):
+        label = f"{i}:{tab['agent']}"
+        part = f"[{label}]" if i - 1 == state["active_tab"] else f" {label} "
+        if text:
+            text += " "
+        start = len(text)
+        text += part
+        regions.append((start, len(text), i - 1))
+    if text:
+        text += " "
+    start = len(text)
+    text += "[+]"
+    regions.append((start, len(text), "new"))
+    return text[:width], [(start, min(end, width), value) for start, end, value in regions if start < width]
+
+
+def tab_bar(state: dict, width: int) -> str:
+    return tab_bar_parts(state, width)[0]
+
+
+def click_tab(state: dict, x: int, y: int) -> None:
+    if y != 1:
+        return
+    for start, end, value in state.get("tab_regions", []):
+        if start <= x - 2 < end:
+            if value == "new":
+                new_tab(state)
+            else:
+                switch_tab(state, int(value))
+            return
+
+
 def process_tui_command(state: dict, command: str) -> bool:
+    ensure_tabs(state)
+    if command in {"/tab", "/tab next"}:
+        switch_tab(state, (state["active_tab"] + 1) % len(state["tabs"]))
+        return True
+    if command == "/tabs":
+        state["log"].append(tab_bar(state, 200))
+        save_active_tab(state)
+        return True
+    if command.startswith("/tab new"):
+        agent = command.removeprefix("/tab new").strip() or state["agent"]
+        if agent not in state["config"]["agents"]:
+            state["log"].append(f"Unknown agent: {agent}")
+            save_active_tab(state)
+            return True
+        new_tab(state, agent)
+        return True
+    if command.startswith("/tab "):
+        raw = command.removeprefix("/tab ").strip()
+        if raw.isdigit():
+            switch_tab(state, int(raw) - 1)
+        else:
+            state["log"].append("Usage: /tab [next|new [agent]|<number>]")
+        save_active_tab(state)
+        return True
+
     config = state["config"]
     session = state["session"]
     agent = state["agent"]
@@ -901,10 +1017,12 @@ def process_tui_command(state: dict, command: str) -> bool:
     else:
         log.append(f"Unknown command: {command}")
     state["log"] = log[-100:]
+    save_active_tab(state)
     return True
 
 
 def process_tui_input(state: dict, text: str) -> bool:
+    ensure_tabs(state)
     if not text:
         return True
     if text.startswith("/"):
@@ -924,13 +1042,18 @@ def process_tui_input(state: dict, text: str) -> bool:
     if code:
         state["log"].append(f"{state['agent']} exited with {code}")
     state["log"] = state["log"][-100:]
+    save_active_tab(state)
     return True
 
 
 def tui_loop(stdscr, state: dict) -> None:
+    ensure_tabs(state)
     curses.curs_set(1)
+    with contextlib.suppress(curses.error):
+        curses.mousemask(curses.BUTTON1_CLICKED)
     input_text = ""
     while True:
+        ensure_tabs(state)
         stdscr.erase()
         height, width = stdscr.getmaxyx()
         if height < 10 or width < 40:
@@ -945,12 +1068,9 @@ def tui_loop(stdscr, state: dict) -> None:
 
         top_label = " HODGE "
         safe_addstr(stdscr, 0, 0, top_label + box_chars()["h"] * max(0, width - len(top_label)))
-        safe_addstr(
-            stdscr,
-            1,
-            2,
-            f"agent {state['agent']} | model {state['model'] or 'native default'} | session {state['session']}",
-        )
+        tabs, regions = tab_bar_parts(state, max(10, width - 4))
+        state["tab_regions"] = regions
+        safe_addstr(stdscr, 1, 2, tabs)
         safe_addstr(stdscr, 2, 0, box_chars()["h"] * width)
 
         if width >= 120 and height >= 22:
@@ -993,13 +1113,17 @@ def tui_loop(stdscr, state: dict) -> None:
             draw_box(stdscr, body_y, left_w + 1, input_y - body_y, right_w, "Chat", chat_lines)
 
         draw_box(stdscr, input_y, 0, 3, width, "Input", [clean_text(input_text)])
-        safe_addstr(stdscr, height - 1, 2, "Enter sends. /q exits. /agent /model /tasks /spec <goal> /run <n>")
+        safe_addstr(stdscr, height - 1, 2, "Click tabs or [+]. Enter sends. /q exits. /agent /model /run <n>")
         with contextlib.suppress(curses.error):
             stdscr.move(input_y + 1, min(width - 2, 1 + len(input_text)))
         stdscr.refresh()
 
         ch = stdscr.get_wch()
-        if ch in ("\n", "\r"):
+        if ch == curses.KEY_MOUSE:
+            with contextlib.suppress(curses.error):
+                _, x, y, _, _ = curses.getmouse()
+                click_tab(state, x, y)
+        elif ch in ("\n", "\r"):
             if not process_tui_input(state, input_text.strip()):
                 return
             input_text = ""
@@ -1024,6 +1148,7 @@ def tui(args: argparse.Namespace) -> int:
         "extra": args.extra,
         "log": [banner(agent, args.model or config["agents"][agent].get("default_model", ""))],
     }
+    ensure_tabs(state)
     try:
         curses.wrapper(tui_loop, state)
         return 0

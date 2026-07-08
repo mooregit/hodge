@@ -16,6 +16,7 @@ from hodge_cli.main import (
     box_chars,
     build_command,
     clean_text,
+    click_tab,
     configure,
     create_spec,
     feedback_line,
@@ -41,6 +42,8 @@ from hodge_cli.main import (
     spec_prompt,
     sparkline,
     status_lines,
+    tab_bar,
+    tab_bar_parts,
     system_lines,
     task_lines,
     usage_lines,
@@ -261,6 +264,41 @@ class HodgeTests(unittest.TestCase):
         self.assertEqual(state["agent"], "claude")
         self.assertTrue(process_tui_command(state, "/model"))
         self.assertEqual(state["model"], "sonnet")
+
+    def test_tui_tabs_switch_agents(self):
+        state = {
+            "config": DEFAULT_CONFIG,
+            "session": "default",
+            "agent": "codex",
+            "model": "",
+            "show_process": False,
+            "extra": [],
+            "log": [],
+        }
+        self.assertTrue(process_tui_command(state, "/tab new claude"))
+        self.assertEqual(state["agent"], "claude")
+        self.assertEqual(state["session"], "default-2")
+        self.assertIn("[2:claude]", tab_bar(state, 80))
+        self.assertTrue(process_tui_command(state, "/tab 1"))
+        self.assertEqual(state["agent"], "codex")
+
+    def test_tui_tab_click_regions(self):
+        state = {
+            "config": DEFAULT_CONFIG,
+            "session": "default",
+            "agent": "codex",
+            "model": "",
+            "show_process": False,
+            "extra": [],
+            "log": [],
+        }
+        process_tui_command(state, "/tab new claude")
+        _, regions = tab_bar_parts(state, 80)
+        state["tab_regions"] = regions
+        click_tab(state, regions[0][0] + 2, 1)
+        self.assertEqual(state["agent"], "codex")
+        click_tab(state, regions[-1][0] + 2, 1)
+        self.assertEqual(len(state["tabs"]), 3)
 
     def test_safe_addstr_clips_to_screen(self):
         screen = FakeScreen()

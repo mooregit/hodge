@@ -90,6 +90,7 @@ TUI mode:
 
 - `hodge tui` opens a curses dashboard with a top bar, system/status panels, chat, task/usage panels, and input.
 - TUI input accepts normal prompts and the same core slash commands: `/status`, `/tasks`, `/spec <goal>`, `/run <n>`, `/last`, `/retry [agent]`, `/agent`, `/model`, `/verbose`, `/clear`, and `/q`.
+- TUI tabs keep separate agent/model/session/log state. Click a tab at the top to switch, click `[+]` to create one, or use `/tab new [agent]`, `/tab next`, `/tab <number>`, and `/tabs`.
 - `/agent` and `/model` cycle in TUI mode. Use `/agent claude` or `/model sonnet` to set explicit values.
 - The dashboard uses Unicode box drawing, bars, and sparklines by default. Use `HODGE_ASCII=1 hodge tui` for plain ASCII fallback.
 
@@ -126,6 +127,10 @@ The package entry point is defined in `pyproject.toml`:
 ```bash
 hodge = "hodge_cli.main:main"
 ```
+
+GitHub Actions runs on every branch push and pull request. The security workflow
+runs unit tests, compile checks, Bandit for medium/high Python security issues,
+CodeQL, and a dependency audit when `requirements.txt` exists.
 
 ## Known gaps
 
