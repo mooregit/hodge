@@ -142,7 +142,7 @@ def append_usage(agent: str, model: str, session: str, tokens: int | None) -> No
     try:
         usage_path().parent.mkdir(parents=True, exist_ok=True)
         row = {
-            "ts": dt.datetime.now(dt.UTC).isoformat(),
+            "ts": dt.datetime.now(dt.timezone.utc).isoformat(),
             "agent": agent,
             "model": model or "native default",
             "session": session,
@@ -163,7 +163,7 @@ def read_usage(agent: str | None = None) -> list[dict]:
 
 
 def usage_summary(agent: str) -> dict:
-    now = dt.datetime.now(dt.UTC)
+    now = dt.datetime.now(dt.timezone.utc)
     rows = read_usage(agent)
     for row in rows:
         row["_dt"] = dt.datetime.fromisoformat(row["ts"])

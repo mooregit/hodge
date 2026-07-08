@@ -205,7 +205,7 @@ class HodgeTests(unittest.TestCase):
         old_home = os.environ.get("HODGE_HOME")
         with tempfile.TemporaryDirectory() as tmp:
             os.environ["HODGE_HOME"] = tmp
-            now = dt.datetime.now(dt.UTC)
+            now = dt.datetime.now(dt.timezone.utc)
             rows = [
                 {"ts": (now - dt.timedelta(hours=1)).isoformat(), "agent": "codex", "tokens": 10},
                 {"ts": (now - dt.timedelta(days=2)).isoformat(), "agent": "codex", "tokens": 20},
