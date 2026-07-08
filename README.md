@@ -3,15 +3,15 @@
 Hodge is a tiny router over installed agent CLIs.
 
 Current status: usable local prototype. It provides a shared REPL over Codex,
-Claude, and Ollama, plus sessions, local usage capture, model picking, and a
-lightweight spec/task workflow.
+Claude, Kiro, and Ollama, plus sessions, local usage capture, model picking,
+and a lightweight spec/task workflow.
 
 ## Install
 
 Requirements:
 
 - Python 3.10+
-- At least one supported agent CLI on `PATH`: `codex`, `claude`, or `ollama`
+- At least one supported agent CLI on `PATH`: `codex`, `claude`, `kiro-cli`, or `ollama`
 - Optional: a running Ollama server for local model discovery
 
 From a checkout:
@@ -46,6 +46,7 @@ hodge --session paper-shield
 hodge chat --agent codex
 hodge tui --agent codex
 hodge chat --agent claude --model sonnet
+hodge chat --agent kiro --model sonnet
 hodge chat --agent ollama --model llama3.2
 hodge agents
 hodge sessions
@@ -78,7 +79,7 @@ Chat commands:
 - `/spec <goal>`: ask the selected agent for a requirements/design/tasks spec, with local fallback
 - `/tasks`: show the current session's task checklist
 - `/run <n>`: send task `n` to the selected agent and mark it done on success
-- `/verbose`: toggle wrapped CLI process output
+- `/verbose`: toggle raw wrapped CLI process output; normal mode shows filtered feedback only
 - `/history`: show recent shared history
 - `/last`: show the last assistant response
 - `/retry [agent]`: rerun the last user prompt with the current agent or named agent
@@ -103,6 +104,7 @@ Defaults:
 
 - `codex`: `codex exec`
 - `claude`: `claude --print`
+- `kiro`: `kiro-cli`
 - `ollama`: `ollama run`
 
 Edit `~/.hodge/config.json` to add another agent.

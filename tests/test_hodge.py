@@ -18,6 +18,7 @@ from hodge_cli.main import (
     clean_text,
     configure,
     create_spec,
+    feedback_line,
     last_message,
     list_sessions,
     local_models,
@@ -82,12 +83,26 @@ class HodgeTests(unittest.TestCase):
             ["codex", "exec", "--model", "gpt-5", "--search", "hi"],
         )
 
+    def test_build_command_supports_kiro_cli(self):
+        agent = DEFAULT_CONFIG["agents"]["kiro"]
+        self.assertEqual(
+            build_command(agent, "sonnet", [], "hi"),
+            ["kiro-cli", "--model", "sonnet", "hi"],
+        )
+
     def test_build_command_supports_positional_model(self):
         agent = DEFAULT_CONFIG["agents"]["ollama"]
         self.assertEqual(build_command(agent, "llama3.2", [], "hi"), ["ollama", "run", "llama3.2", "hi"])
 
     def test_passthrough_strips_separator(self):
         self.assertEqual(passthrough(["--", "--search"]), ["--search"])
+
+    def test_feedback_line_filters_noise(self):
+        self.assertIsNone(feedback_line("codex", "model: gpt-5.5"))
+        self.assertIsNone(feedback_line("codex", "approval: never"))
+        self.assertEqual(feedback_line("codex", "approval: run command?"), "[codex] approval: run command?")
+        self.assertEqual(feedback_line("codex", "checking files"), "[codex] checking files")
+        self.assertEqual(feedback_line("codex", "permission required"), "[codex] permission required")
 
     def test_parse_codex_tokens(self):
         self.assertEqual(parse_tokens("tokens used\n13,870\n"), 13870)

@@ -31,6 +31,12 @@ DEFAULT_CONFIG = {
             "default_model": "",
             "models": ["native default", "sonnet", "opus", "fable"],
         },
+        "kiro": {
+            "command": ["kiro-cli"],
+            "model_flag": "--model",
+            "default_model": "",
+            "models": ["native default", "sonnet", "opus"],
+        },
         "ollama": {
             "command": ["ollama", "run"],
             "model_arg": "positional",
@@ -277,6 +283,66 @@ def passthrough(extra: list[str]) -> list[str]:
     return extra[1:] if extra[:1] == ["--"] else extra
 
 
+NOISE_PREFIXES = (
+    "--------",
+    "workdir:",
+    "model:",
+    "provider:",
+    "sandbox:",
+    "reasoning ",
+    "session id:",
+    "user",
+    "tokens used",
+    "hook:",
+    "warning: skill descriptions",
+)
+
+
+FEEDBACK_PREFIXES = (
+    "thinking",
+    "working",
+    "reading",
+    "searching",
+    "checking",
+    "planning",
+    "running",
+    "editing",
+    "applying",
+    "waiting",
+    "requesting",
+    "permission",
+    "approval",
+    "tool",
+    "command",
+    "exec",
+    "patch",
+    "error",
+    "warning",
+    "i'll ",
+    "i’m ",
+    "i'm ",
+)
+
+
+def noise_line(text: str, agent_name: str) -> bool:
+    lower = text.lower()
+    if not text or lower in {agent_name, "assistant"} or lower.startswith(NOISE_PREFIXES):
+        return True
+    if lower.startswith("approval:"):
+        return lower.removeprefix("approval:").strip() in {"never", "on-request", "on-failure", "untrusted"}
+    return False
+
+
+def feedback_line(agent_name: str, line: str) -> str | None:
+    text = clean_text(line).strip()
+    lower = text.lower()
+    if noise_line(text, agent_name):
+        return None
+    if lower.startswith(FEEDBACK_PREFIXES) or "permission" in lower or "approval" in lower:
+        return f"[{agent_name}] {text}"
+    return None
+
+
 def latest_spec_path(session: str) -> Path:
     return specs_dir() / f"{session_file(session).removesuffix('.jsonl')}.md"
 
@@ -460,7 +526,7 @@ def run_agent(
     cmd = build_command(agent, model or agent.get("default_model", ""), extra, prompt)
 
     if output_path and not show_process:
-        print(f"{agent_name} is running...")
+        print(f"{agent_name} is running...", flush=True)
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     output = []
     assert proc.stdout is not None
@@ -468,6 +534,8 @@ def run_agent(
         output.append(line)
         if not output_path or show_process:
             print(line, end="")
+        elif feedback := feedback_line(agent_name, line):
+            print(feedback, flush=True)
     code = proc.wait()
     proc.stdout.close()
     text = Path(output_path).read_text().strip() if output_path else "".join(output).strip()
