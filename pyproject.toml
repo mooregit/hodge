@@ -1,0 +1,9 @@
+[project]
+name = "hodge-cli"
+version = "0.1.0"
+description = "One chat CLI for installed agent CLIs."
+requires-python = ">=3.10"
+
+[project.scripts]
+hodge = "hodge_cli.main:main"
+
